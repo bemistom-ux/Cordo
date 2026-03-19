@@ -188,42 +188,28 @@ def build_guide_tones(tpc, spc, prev, reg, vmode):
         return min(cands, key=lambda c: abs(sum(c)/2 - reg))
 
 
-def build_rootless(tpc, spc, fpc, npc, reg, n_notes, prev=None):
+def build_rootless(tpc, spc, npc, reg, prev=None):
     """
-    Generate all valid rootless inversions and pick the best one
-    using common tone / minimal motion voice leading.
-    3-note: 7-3-5, 3-5-7, 5-7-3
-    4-note: 7-3-5-9, 3-5-7-9, 5-7-9-3, 9-3-5-7
+    Rootless voicing: 7, 3, 9 — no 5th.
+    Tries all inversions and picks best via voice leading.
     """
-    # Get all midi options for each pitch class in register
     low  = reg - 14
     high = reg + 14
     t_opts = all_midis_for_pc(tpc, low, high)
     s_opts = all_midis_for_pc(spc, low, high)
-    f_opts = all_midis_for_pc(fpc, low, high)
     n_opts = all_midis_for_pc(npc, low, high)
 
-    if not t_opts or not s_opts or not f_opts:
+    if not t_opts or not s_opts or not n_opts:
         return None
 
-    # Build all valid voicings: sorted ascending, span <= 18 semitones
+    # All valid 3-note voicings: span <= 18 semitones, all distinct
     candidates = []
-    if n_notes == 3:
-        for t in t_opts:
-            for s in s_opts:
-                for f in f_opts:
-                    v = tuple(sorted([t, s, f]))
-                    if len(set(v)) == 3 and v[-1] - v[0] <= 18:
-                        candidates.append(v)
-    else:
-        if not n_opts: return None
-        for t in t_opts:
-            for s in s_opts:
-                for f in f_opts:
-                    for n in n_opts:
-                        v = tuple(sorted([t, s, f, n]))
-                        if len(set(v)) == 4 and v[-1] - v[0] <= 18:
-                            candidates.append(v)
+    for t in t_opts:
+        for s in s_opts:
+            for n in n_opts:
+                v = tuple(sorted([t, s, n]))
+                if len(set(v)) == 3 and v[-1] - v[0] <= 18:
+                    candidates.append(v)
 
     if not candidates:
         return None
@@ -241,22 +227,23 @@ def build_rootless(tpc, spc, fpc, npc, reg, n_notes, prev=None):
         return list(min(candidates, key=lambda c: abs(sum(c)/len(c) - reg)))
 
 
-def build_full_chord(rpc, tpc, fpc, spc, npc, extensions, reg, prev=None):
+def build_full_chord(rpc, tpc, spc, npc, extensions, reg, prev=None):
     """
-    Full chord = R + 3 + 5 + 7 + any extensions.
+    Full chord = R + 3 + 7 + any extensions (no 5th).
     Tries all inversions and picks best via voice leading.
     """
     ro = closest_midi(rpc, reg - 7)
     if ro is None: return None, []
 
-    core_pcs   = [rpc, tpc, fpc, spc]
-    core_roles = ['root', 'third', 'fifth', 'seventh']
+    # Core: root, third, seventh (no fifth)
+    core_pcs   = [rpc, tpc, spc]
+    core_roles = ['root', 'third', 'seventh']
     ext_roles  = ['ninth'] + ['extension'] * (len(extensions) - 1)
 
     all_pcs   = core_pcs   + extensions
     all_roles = core_roles + ext_roles
 
-    # Build the chord stacked upward from root
+    # Stack upward from root
     midi_notes = [ro]
     role_list  = ['root']
     prev_note  = ro
@@ -276,18 +263,16 @@ def build_full_chord(rpc, tpc, fpc, spc, npc, extensions, reg, prev=None):
     if midi_notes[-1] - midi_notes[0] > 26:
         return None, []
 
-    # Now try all rotations (inversions) and pick best via voice leading
+    # Try all inversions
     n = len(midi_notes)
     sorted_pairs = sorted(zip(midi_notes, role_list))
     base_midis = [x[0] for x in sorted_pairs]
     base_roles = [x[1] for x in sorted_pairs]
 
-    # Generate inversions by shifting each note up an octave
     inversions = []
     for i in range(n):
         inv = list(base_midis)
         inv_roles = list(base_roles)
-        # Rotate: move bottom i notes up an octave
         for j in range(i):
             inv[j] += 12
         inv_sorted = sorted(zip(inv, inv_roles))
@@ -456,7 +441,7 @@ def generate_files(chord_list, bpm, hand_choice, b_style,
     if note_mode == 'Guide Tones':
         mode_label = f"Guide Tones | {voicing_mode}"
     elif note_mode == 'Rootless':
-        mode_label = f"Rootless {n_notes}-note"
+        mode_label = "Rootless (7-3-9)"
     else:
         mode_label = "Full Chord"
     color_label = "Highlight 3+7" if color_mode == 'Highlight 3+7' else "Each interval"
@@ -470,14 +455,14 @@ def generate_files(chord_list, bpm, hand_choice, b_style,
             legend_str = "3rd = BLUE   |   7th = GREEN"
     elif note_mode == 'Rootless':
         if color_mode == 'Highlight 3+7':
-            legend_str = "3rd & 7th = BLUE   |   5th = GRAY   |   9th = RED"
+            legend_str = "3rd & 7th = BLUE   |   9th = RED"
         else:
-            legend_str = "3rd = BLUE   |   7th = GREEN   |   5th = GRAY   |   9th = RED"
+            legend_str = "3rd = BLUE   |   7th = GREEN   |   9th = RED"
     else:
         if color_mode == 'Highlight 3+7':
-            legend_str = "Root = BLACK   |   3rd & 7th = BLUE   |   5th = GRAY   |   9th = RED   |   extensions = PURPLE"
+            legend_str = "Root = BLACK   |   3rd & 7th = BLUE   |   9th = RED   |   extensions = PURPLE"
         else:
-            legend_str = "Root = BLACK   |   3rd = BLUE   |   7th = GREEN   |   5th = GRAY   |   9th = RED   |   extensions = PURPLE"
+            legend_str = "Root = BLACK   |   3rd = BLUE   |   7th = GREEN   |   9th = RED   |   extensions = PURPLE"
     xml_score.metadata.subtitle = legend_str
 
     tm = tempo.MetronomeMark(number=bpm)
@@ -547,14 +532,13 @@ def generate_files(chord_list, bpm, hand_choice, b_style,
                 role_map   = {tpc: 'third', spc: 'seventh'}
 
         elif note_mode == 'Rootless':
-            rl = build_rootless(tpc, spc, fpc, npc, reg, n_notes, prev_midis)
+            rl = build_rootless(tpc, spc, npc, reg, prev_midis)
             if rl is not None:
                 midi_notes = rl
-                role_map   = {tpc: 'third', spc: 'seventh',
-                              fpc: 'fifth', npc: 'ninth'}
+                role_map   = {tpc: 'third', spc: 'seventh', npc: 'ninth'}
 
         else:  # Full Chord
-            fc, fc_roles = build_full_chord(rpc, tpc, fpc, spc, npc, extensions, reg, prev_midis)
+            fc, fc_roles = build_full_chord(rpc, tpc, spc, npc, extensions, reg, prev_midis)
             if fc is not None:
                 midi_notes = fc
                 # build role_map from the returned role list
@@ -746,10 +730,10 @@ with st.sidebar:
         n_notes = 2
     elif note_mode == 'Rootless':
         voicing_mode = 'Mixed'
-        n_notes = st.radio("Note count", [3, 4])
+        n_notes = 3  # always 3 now (7-3-9)
     else:
         voicing_mode = 'Mixed'
-        n_notes = 4
+        n_notes = 4  # unused
 
     b_style = st.selectbox("Bass Style", ["Root Only", "Classic 1-5"])
     rhythm  = st.radio("Rhythm", ["Whole note", "Two feel", "Beats 2 & 4", "Charleston"])
@@ -759,10 +743,10 @@ with st.sidebar:
 legend = {
     ('Guide Tones', 'Highlight 3+7'): "🔵 3rd & 7th",
     ('Guide Tones', 'Each interval'): "🔵 3rd   🟢 7th",
-    ('Rootless',    'Highlight 3+7'): "🔵 3rd & 7th   🔴 9th   ⚫ 5th",
-    ('Rootless',    'Each interval'): "🔵 3rd   🟢 7th   🔴 9th   ⚫ 5th",
-    ('Full Chord',  'Highlight 3+7'): "⚫ Root   🔵 3rd & 7th   🔴 9th   🩶 5th",
-    ('Full Chord',  'Each interval'): "⚫ Root   🔵 3rd   🟢 7th   🔴 9th   🩶 5th",
+    ('Rootless',    'Highlight 3+7'): "🔵 3rd & 7th   🔴 9th",
+    ('Rootless',    'Each interval'): "🔵 3rd   🟢 7th   🔴 9th",
+    ('Full Chord',  'Highlight 3+7'): "⚫ Root   🔵 3rd & 7th   🔴 9th   🟣 extensions",
+    ('Full Chord',  'Each interval'): "⚫ Root   🔵 3rd   🟢 7th   🔴 9th   🟣 extensions",
 }
 st.caption(legend.get((note_mode, color_mode), ""))
 st.caption("Shorthands: M or ^ = maj7 · - = m7 · h = half-dim  e.g. EbM  Bb-  Bh")
