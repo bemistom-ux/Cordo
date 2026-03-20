@@ -714,7 +714,7 @@ def transpose_progression(chords, key):
 # ---------------------------------------------------------------------------
 
 st.set_page_config(page_title="Jazz Guide Tones", layout="wide")
-st.title("🎹 Jazz Guide Tone Practice Sheet")
+st.title("🎹 Jazz Guide Tone Practice Sheet (BETA)")
 
 for key in ['xml', 'mid', 'safe_name']:
     if key not in st.session_state:
