@@ -1,5 +1,5 @@
 import streamlit as st
-from music21 import stream, chord, pitch, note, clef, instrument, tempo, expressions, meter
+from music21 import stream, chord, pitch, note, clef, instrument, tempo, expressions
 import re
 
 # ---------------------------------------------------------------------------
@@ -323,90 +323,89 @@ def make_chord(midi_list, role_map, pf, color_mode, duration=4.0):
 # RHYTHM PATTERNS
 # ---------------------------------------------------------------------------
 
-def make_chord_rhythm(piano_chord, rhythm, time_sig='4/4'):
+def make_chord_rhythm(piano_chord, rhythm):
     """
-    Returns a list of music21 elements for one measure of the chord.
-    Adapts to 3/4 or 4/4 time signature.
+    Returns a list of music21 elements (notes/rests) for one measure
+    of the given chord in the specified rhythm pattern.
+
+    rhythm options:
+      'Whole note'     — one whole note
+      'Beats 2 & 4'   — rests on 1&3, chords on 2&4
+      'Charleston'     — chord on beat 1, chord on and-of-2
+      'Two feel'       — half notes on beats 1 and 3
     """
     def ch(ql):
+        # Clone the chord with a new duration
         c = chord.Chord([n.pitch for n in piano_chord.notes], quarterLength=ql)
         for i, n in enumerate(c.notes):
             n.style.color = piano_chord.notes[i].style.color
         return c
 
-    if time_sig == '3/4':
-        if rhythm == 'Beat 2 only':
-            return [note.Rest(quarterLength=1.0), ch(1.0), note.Rest(quarterLength=1.0)]
-        elif rhythm == 'Charleston':
-            # Beat 1 + and-of-2 (ties into beat 3)
-            return [ch(1.0), note.Rest(quarterLength=0.5), ch(1.5)]
-        elif rhythm == 'Two feel':
-            return [ch(1.5), ch(1.5)]
-        else:  # Dotted half (whole note equivalent in 3/4)
-            return [ch(3.0)]
-    else:  # 4/4
-        if rhythm == 'Beats 2 & 4':
-            return [note.Rest(quarterLength=1.0), ch(1.0),
-                    note.Rest(quarterLength=1.0), ch(1.0)]
-        elif rhythm == 'Charleston':
-            return [ch(1.0), note.Rest(quarterLength=0.5),
-                    ch(1.5), note.Rest(quarterLength=1.0)]
-        elif rhythm == 'Two feel':
-            return [ch(2.0), ch(2.0)]
-        else:  # Whole note
-            return [ch(4.0)]
+    if rhythm == 'Beats 2 & 4':
+        return [
+            note.Rest(quarterLength=1.0),
+            ch(1.0),
+            note.Rest(quarterLength=1.0),
+            ch(1.0),
+        ]
+    elif rhythm == 'Charleston':
+        # Beat 1 (quarter) + rest (eighth) + chord on and-of-2 (dotted quarter carries to 4)
+        return [
+            ch(1.0),
+            note.Rest(quarterLength=0.5),
+            ch(1.5),
+            note.Rest(quarterLength=1.0),
+        ]
+    elif rhythm == 'Two feel':
+        return [
+            ch(2.0),
+            ch(2.0),
+        ]
+    else:  # Whole note
+        return [ch(4.0)]
 
 
-def make_bass_rhythm(bass_p, br, b_style, rhythm, time_sig='4/4'):
-    """Returns bass elements for one measure, adapted to time signature."""
+def make_bass_rhythm(bass_p, br, b_style, rhythm):
+    """
+    Returns a list of music21 elements for the bass in one measure.
+    bass_p  = music21 Pitch for root
+    br      = root MIDI number
+    b_style = 'Root Only' or 'Classic 1-5'
+    rhythm  = same rhythm string as above
+    """
     fifth_p = midi_to_pitch_obj(br + 7, False)
 
-    def root_note(ql): return note.Note(bass_p, quarterLength=ql)
-    def fifth_note(ql):
-        n = note.Note(); n.pitch = fifth_p; n.quarterLength = ql; return n
+    def root_note(ql):
+        return note.Note(bass_p, quarterLength=ql)
 
-    if time_sig == '3/4':
-        if b_style == 'Classic 1-5':
-            if rhythm == 'Beat 2 only':
-                return [note.Rest(quarterLength=1.0), root_note(1.0), fifth_note(1.0)]
-            elif rhythm == 'Charleston':
-                return [root_note(1.0), note.Rest(quarterLength=0.5), fifth_note(1.5)]
-            elif rhythm == 'Two feel':
-                return [root_note(1.5), fifth_note(1.5)]
-            else:  # dotted half
-                return [root_note(1.5), fifth_note(1.5)]
-        else:  # Root Only
-            if rhythm == 'Beat 2 only':
-                return [note.Rest(quarterLength=1.0), root_note(1.0), note.Rest(quarterLength=1.0)]
-            elif rhythm == 'Charleston':
-                return [root_note(1.0), note.Rest(quarterLength=0.5), root_note(1.5)]
-            elif rhythm == 'Two feel':
-                return [root_note(1.5), root_note(1.5)]
-            else:
-                return [root_note(3.0)]
-    else:  # 4/4
-        if b_style == 'Classic 1-5':
-            if rhythm == 'Whole note':
-                return [root_note(2.0), fifth_note(2.0)]
-            elif rhythm == 'Beats 2 & 4':
-                return [note.Rest(quarterLength=1.0), root_note(1.0),
-                        note.Rest(quarterLength=1.0), fifth_note(1.0)]
-            elif rhythm == 'Charleston':
-                return [root_note(1.0), note.Rest(quarterLength=0.5),
-                        fifth_note(1.5), note.Rest(quarterLength=1.0)]
-            elif rhythm == 'Two feel':
-                return [root_note(2.0), fifth_note(2.0)]
-        else:  # Root Only
-            if rhythm == 'Whole note':
-                return [root_note(4.0)]
-            elif rhythm == 'Beats 2 & 4':
-                return [note.Rest(quarterLength=1.0), root_note(1.0),
-                        note.Rest(quarterLength=1.0), root_note(1.0)]
-            elif rhythm == 'Charleston':
-                return [root_note(1.0), note.Rest(quarterLength=0.5),
-                        root_note(1.5), note.Rest(quarterLength=1.0)]
-            elif rhythm == 'Two feel':
-                return [root_note(2.0), root_note(2.0)]
+    def fifth_note(ql):
+        n = note.Note()
+        n.pitch = fifth_p
+        n.quarterLength = ql
+        return n
+
+    if b_style == 'Classic 1-5':
+        if rhythm == 'Whole note':
+            return [root_note(2.0), fifth_note(2.0)]
+        elif rhythm == 'Beats 2 & 4':
+            return [note.Rest(quarterLength=1.0), root_note(1.0),
+                    note.Rest(quarterLength=1.0), fifth_note(1.0)]
+        elif rhythm == 'Charleston':
+            return [root_note(1.0), note.Rest(quarterLength=0.5),
+                    fifth_note(1.5), note.Rest(quarterLength=1.0)]
+        elif rhythm == 'Two feel':
+            return [root_note(2.0), fifth_note(2.0)]
+    else:  # Root Only
+        if rhythm == 'Whole note':
+            return [root_note(4.0)]
+        elif rhythm == 'Beats 2 & 4':
+            return [note.Rest(quarterLength=1.0), root_note(1.0),
+                    note.Rest(quarterLength=1.0), root_note(1.0)]
+        elif rhythm == 'Charleston':
+            return [root_note(1.0), note.Rest(quarterLength=0.5),
+                    root_note(1.5), note.Rest(quarterLength=1.0)]
+        elif rhythm == 'Two feel':
+            return [root_note(2.0), root_note(2.0)]
 
     return [root_note(4.0)]  # fallback
 
@@ -418,8 +417,7 @@ REG_LH = 50
 
 def generate_files(chord_list, bpm, hand_choice, b_style,
                    note_mode, voicing_mode, n_notes, color_mode,
-                   score_title='Jazz Guide Tones', rhythm='Whole note',
-                   time_sig='4/4'):
+                   score_title='Jazz Guide Tones', rhythm='Whole note'):
 
     xml_score  = stream.Score()
     midi_score = stream.Score()
@@ -450,7 +448,7 @@ def generate_files(chord_list, bpm, hand_choice, b_style,
     else:
         mode_label = "Full Chord"
     color_label = "Highlight 3+7" if color_mode == 'Highlight 3+7' else "Each interval"
-    xml_score.metadata.composer = f"{clef_label} | {mode_label} | {color_label} | {rhythm} | {time_sig}"
+    xml_score.metadata.composer = f"{clef_label} | {mode_label} | {color_label} | {rhythm}"
 
     # Color legend as subtitle
     if note_mode == 'Guide Tones':
@@ -471,37 +469,33 @@ def generate_files(chord_list, bpm, hand_choice, b_style,
     xml_score.metadata.subtitle = legend_str
 
     tm = tempo.MetronomeMark(number=bpm)
-    beats, beat_type = time_sig.split('/')
-    ts = meter.TimeSignature(time_sig)
 
     # Measure 0
     m0p = stream.Measure(number=0)
     m0p.insert(0, clef.BassClef() if is_lh else clef.TrebleClef())
-    m0p.insert(0, ts)
-    m0_dur = int(beats)  # quarter notes per measure
-    m0p.append(note.Rest(quarterLength=m0_dur))
+    m0p.append(note.Rest(type='whole'))
     p_xml.append(m0p)
 
     m0b = stream.Measure(number=0)
     m0b.insert(0, clef.BassClef())
-    m0b.append(note.Rest(quarterLength=m0_dur))
+    m0b.append(note.Rest(type='whole'))
     b_xml.append(m0b)
 
     m0d = stream.Measure(number=0)
     m0d.insert(0, clef.PercussionClef())
     m0d.insert(0, tm)
-    for _ in range(m0_dur):
+    for _ in range(4):
         m0d.append(note.Note(44, quarterLength=1.0))
     d_xml.append(m0d)
 
     m0dm = stream.Measure(number=0)
     m0dm.insert(0, tm)
-    for _ in range(m0_dur):
+    for _ in range(4):
         m0dm.append(note.Note(44, quarterLength=1.0))
     d_mid.append(m0dm)
 
     m0bm = stream.Measure(number=0)
-    m0bm.append(note.Rest(quarterLength=m0_dur))
+    m0bm.append(note.Rest(type='whole'))
     b_mid.append(m0bm)
 
     prev_midis = None
@@ -566,7 +560,7 @@ def generate_files(chord_list, bpm, hand_choice, b_style,
         # Piano — apply rhythm pattern
         pm = stream.Measure(number=i+1)
         pm.append(expressions.TextExpression(raw))
-        for elem in make_chord_rhythm(piano_chord, rhythm, time_sig):
+        for elem in make_chord_rhythm(piano_chord, rhythm):
             pm.append(elem)
         p_xml.append(pm)
 
@@ -574,7 +568,7 @@ def generate_files(chord_list, bpm, hand_choice, b_style,
         br     = best_bass_midi(rpc)
         bass_p = midi_to_pitch_obj(br, pf)
         bm_xml = stream.Measure(number=i+1)
-        for elem in make_bass_rhythm(bass_p, br, b_style, rhythm, time_sig):
+        for elem in make_bass_rhythm(bass_p, br, b_style, rhythm):
             bm_xml.append(elem)
         b_xml.append(bm_xml)
 
@@ -587,15 +581,13 @@ def generate_files(chord_list, bpm, hand_choice, b_style,
         # MIDI bass
         bm_mid = stream.Measure(number=i+1)
         pat = [br, br+7, br+12, br+7] if "Classic" in b_style else [br]*4
-        # Trim or extend pattern to match time sig
-        pat = pat[:m0_dur] if len(pat) >= m0_dur else pat + [br] * (m0_dur - len(pat))
         for mv in pat:
             bm_mid.append(note.Note(mv, type='quarter'))
         b_mid.append(bm_mid)
 
         # MIDI drums
         dm_mid = stream.Measure(number=i+1)
-        for _ in range(m0_dur):
+        for _ in range(4):
             dm_mid.append(note.Note(51, type='quarter'))
         d_mid.append(dm_mid)
 
@@ -720,19 +712,8 @@ def transpose_progression(chords, key):
 # UI
 # ---------------------------------------------------------------------------
 
-st.set_page_config(page_title="Jazz Guide Tones", layout="wide")
+st.set_page_config(page_title="Jazz Cordo Tones", layout="wide")
 st.title("🎹 Jazz Guide Tone Practice Sheet")
-
-st.markdown("""
-This tool generates practice sheet music for learning chords and chord progressions in jazz.
-
-**Three steps:**
-1. **Enter your chord progression** — type symbols directly, paste from another source, or use the Progression Builder below
-2. **Format your score** — choose clef, voicing style, rhythm, colors and more using the sidebar on the left
-3. **Generate and download** — get a `.musicxml` score for MuseScore 4 or Dorico, plus a MIDI file for playback
-""")
-
-st.divider()
 
 for key in ['xml', 'mid', 'safe_name']:
     if key not in st.session_state:
@@ -748,18 +729,14 @@ with st.sidebar:
         n_notes = 2
     elif note_mode == 'Rootless':
         voicing_mode = 'Mixed'
-        n_notes = 3
+        n_notes = 3  # always 3 now (7-3-9)
     else:
         voicing_mode = 'Mixed'
-        n_notes = 4
+        n_notes = 4  # unused
 
-    b_style  = st.selectbox("Bass Style", ["Root Only", "Classic 1-5"])
-    time_sig = st.radio("Time Signature", ["4/4", "3/4"])
-    if time_sig == '3/4':
-        rhythm = st.radio("Rhythm", ["Dotted half", "Two feel", "Beat 2 only", "Charleston"])
-    else:
-        rhythm = st.radio("Rhythm", ["Whole note", "Two feel", "Beats 2 & 4", "Charleston"])
-    bpm = st.slider("BPM", 40, 200, 110)
+    b_style = st.selectbox("Bass Style", ["Root Only", "Classic 1-5"])
+    rhythm  = st.radio("Rhythm", ["Whole note", "Two feel", "Beats 2 & 4", "Charleston"])
+    bpm     = st.slider("BPM", 40, 200, 110)
 
 # Color legend
 legend = {
@@ -771,101 +748,19 @@ legend = {
     ('Full Chord',  'Each interval'): "⚫ Root   🔵 3rd   🟢 7th   🔴 9th   🟣 extensions",
 }
 st.caption(legend.get((note_mode, color_mode), ""))
+st.caption("Shorthands: M or ^ = maj7 · - = m7 · h = half-dim  e.g. EbM  Bb-  Bh")
 
-# ── Step 1: Chord Progression ─────────────────────────────────────────────────
-st.subheader("Step 1 — Enter your chord progression")
-st.caption("Type chord symbols directly, paste from another source, or use the Progression Builder below.  "
-           "Shorthands: M or ^ = maj7 · - = m7 · h = half-dim  e.g. EbM  Bb-  Bh")
-
-score_name = st.text_input("Score name:", "my_changes")
-
-default_prog = st.session_state.get('built_progression',
-                                    "Dm7 G7 Cmaj7 Cmaj7\nAm7 D7 Gmaj7 Gmaj7")
-user_prog = st.text_area("Chord progression:", value=default_prog, height=120)
-
-# ── Progression Builder ───────────────────────────────────────────────────────
-with st.expander("🎼 Progression Builder — select from common jazz progressions", expanded=False):
-    st.caption("Pick a key, check the progressions you want, set how many times each repeats, then click Build.")
-
-    key_sel = st.selectbox("Key", KEY_ORDER, index=0)
-
-    h1, h2, h3 = st.columns([3, 4, 1])
-    h1.markdown("**Progression**")
-    h2.markdown("**Description**")
-    h3.markdown("**Repeat**")
-
-    selections = []
-    for i, (name, desc, chords) in enumerate(PROGRESSIONS):
-        c1, c2, c3 = st.columns([3, 4, 1])
-        checked = c1.checkbox(name, key=f'prog_{i}', value=False)
-        c2.caption(desc)
-        repeats = c3.number_input("", min_value=1, max_value=8, value=1,
-                                  key=f'rep_{i}', label_visibility='collapsed')
-        if checked:
-            selections.append((chords, int(repeats)))
-
-    if st.button("Build Progression →", type="primary"):
-        if selections:
-            all_chords = []
-            for chords, repeats in selections:
-                transposed = transpose_progression(chords, key_sel)
-                for _ in range(repeats):
-                    all_chords.extend(transposed)
-            st.session_state['built_progression'] = ' '.join(all_chords)
-            st.success(f"Built {len(all_chords)} chords — scroll up to the chord box to review and edit.")
-        else:
-            st.warning("Select at least one progression.")
-
-st.divider()
-
-# ── Step 2: Format reminder ───────────────────────────────────────────────────
-st.subheader("Step 2 — Format your score")
-st.caption("Use the sidebar on the left to set clef, voicing style, rhythm pattern, bass line, colors and tempo.")
-
-st.divider()
-
-# ── Step 3: Generate ─────────────────────────────────────────────────────────
-st.subheader("Step 3 — Generate and download")
-
-if st.button("Generate Score", type="primary"):
-    chord_list = user_prog.split()
-    safe_name  = re.sub(r'[^a-zA-Z0-9_\-]', '_', score_name.strip()) or "my_changes"
-    if chord_list:
-        with st.spinner("Building score…"):
-            xml_obj, mid_obj, skipped = generate_files(
-                chord_list, bpm, hand, b_style,
-                note_mode, voicing_mode, n_notes, color_mode,
-                score_title=score_name.strip() or "Jazz Guide Tones",
-                rhythm=rhythm, time_sig=time_sig
-            )
-        if skipped:
-            st.warning(f"Couldn't parse: {', '.join(skipped)} — rests inserted.")
-
-        xp = f"{safe_name}.musicxml"
-        xml_obj.write('musicxml', fp=xp)
-        with open(xp, "rb") as f:
-            st.session_state.xml = f.read()
-
-        mp = f"{safe_name}.mid"
-        mid_obj.write('midi', fp=mp)
-        with open(mp, "rb") as f:
-            st.session_state.mid = f.read()
-
-        st.session_state.safe_name = safe_name
-        st.success("Done! Download your files below.")
-
-c1, c2 = st.columns(2)
-safe = st.session_state.safe_name
-if st.session_state.mid:
-    c1.download_button("🎵 MIDI",  st.session_state.mid, f"{safe}.mid")
-if st.session_state.xml:
-    c2.download_button("💾 Score", st.session_state.xml, f"{safe}.musicxml")
-
-st.divider()
-
-# ── Help ─────────────────────────────────────────────────────────────────────
-with st.expander("📖 Get more details on using this tool", expanded=False):
+# ── Instructions ──────────────────────────────────────────────────────────────
+with st.expander("ℹ️ How to use this tool", expanded=False):
     st.markdown("""
+**Quick Start**
+1. Pick a key and progressions in the **Progression Builder** below, click **Build Progression →**
+2. Adjust settings in the **sidebar** (clef, notes, rhythm etc.)
+3. Give your score a name, then click **Generate Score**
+4. Download the score (.musicxml) and open in MuseScore, or download the MIDI for playback
+
+---
+
 **Sidebar Settings**
 
 | Setting | Options | Notes |
@@ -909,7 +804,7 @@ with st.expander("📖 Get more details on using this tool", expanded=False):
 
 **Voice Leading (Mixed mode)**
 The algorithm picks the voicing with the most notes in common with the previous chord,
-then minimises movement while staying in the target register.
+then minimises movement, while staying in the target register.
 This is how jazz pianists naturally move through changes.
 
 ---
@@ -918,7 +813,84 @@ This is how jazz pianists naturally move through changes.
 - **Black** = Root · **Blue** = 3rd · **Green** = 7th · **Red** = 9th · **Purple** = extensions
 - Accidentals match the color of their note
 - In *Highlight 3+7* mode, 3rd and 7th are both blue
-
-*↑ Click the bar above to close this section.*
 """)
+
+# ── Progression Builder ───────────────────────────────────────────────────────
+with st.expander("🎼 Progression Builder", expanded=False):
+    st.caption("Select progressions, set repeat counts, choose a key, then click Build.")
+
+    key_sel = st.selectbox("Key", KEY_ORDER, index=0)
+
+    # Table header
+    h1, h2, h3 = st.columns([3, 4, 1])
+    h1.markdown("**Progression**")
+    h2.markdown("**Description**")
+    h3.markdown("**Repeat**")
+
+    selections = []
+    for i, (name, desc, chords) in enumerate(PROGRESSIONS):
+        c1, c2, c3 = st.columns([3, 4, 1])
+        checked = c1.checkbox(name, key=f'prog_{i}', value=False)
+        c2.caption(desc)
+        repeats = c3.number_input("", min_value=1, max_value=8, value=1,
+                                  key=f'rep_{i}', label_visibility='collapsed')
+        if checked:
+            selections.append((chords, int(repeats)))
+
+    if st.button("Build Progression →", type="primary"):
+        if selections:
+            all_chords = []
+            for chords, repeats in selections:
+                transposed = transpose_progression(chords, key_sel)
+                for _ in range(repeats):
+                    all_chords.extend(transposed)
+            st.session_state['built_progression'] = ' '.join(all_chords)
+            st.success(f"Built {len(all_chords)} chords — see progression box below.")
+        else:
+            st.warning("Select at least one progression.")
+
+# ── Score name and chord input ────────────────────────────────────────────────
+score_name = st.text_input("Score name:", "my_changes")
+
+# Use built progression if available, otherwise keep previous value
+default_prog = st.session_state.get('built_progression',
+                                    "Dm7 G7 Cmaj7 Cmaj7\nAm7 D7 Gmaj7 Gmaj7")
+user_prog = st.text_area("Chord progression:", value=default_prog, height=120)
+
+if st.button("Generate Score"):
+    chord_list = user_prog.split()
+    safe_name  = re.sub(r'[^a-zA-Z0-9_\-]', '_', score_name.strip()) or "my_changes"
+    if chord_list:
+        with st.spinner("Building score…"):
+            xml_obj, mid_obj, skipped = generate_files(
+                chord_list, bpm, hand, b_style,
+                note_mode, voicing_mode, n_notes, color_mode,
+                score_title=score_name.strip() or "Jazz Guide Tones",
+                rhythm=rhythm
+            )
+        if skipped:
+            st.warning(f"Couldn't parse: {', '.join(skipped)} — rests inserted.")
+
+        xp = f"{safe_name}.musicxml"
+        xml_obj.write('musicxml', fp=xp)
+        with open(xp, "rb") as f:
+            st.session_state.xml = f.read()
+
+        mp = f"{safe_name}.mid"
+        mid_obj.write('midi', fp=mp)
+        with open(mp, "rb") as f:
+            st.session_state.mid = f.read()
+
+        st.session_state.safe_name = safe_name
+        st.success("Done! Download your files below.")
+
+st.divider()
+c1, c2 = st.columns(2)
+safe = st.session_state.safe_name
+if st.session_state.mid:
+    c1.download_button("🎵 MIDI",  st.session_state.mid, f"{safe}.mid")
+if st.session_state.xml:
+    c2.download_button("💾 Score", st.session_state.xml, f"{safe}.musicxml")
+
+
 
